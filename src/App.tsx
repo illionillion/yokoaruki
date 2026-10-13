@@ -1,9 +1,7 @@
+import { Game } from "./game/Game.tsx";
+
 function App() {
-  return (
-    <main>
-      <h1>よこあるき</h1>
-    </main>
-  );
+  return <Game />;
 }
 
 export default App;

@@ -1,0 +1,42 @@
+/** 道路・車・蟹の寸法やゲーム定数（単位は three.js のワールド座標） */
+export const ROAD = {
+  /** 道路の横幅（x 方向） */
+  width: 8,
+  /** 車が出現する奥の位置（z） */
+  spawnZ: -70,
+  /** 車が消える手前の位置（z） */
+  despawnZ: 12,
+  length: 90,
+} as const;
+
+export const CRAB = {
+  /** 蟹がいる z 位置（固定。前後には動かない） */
+  z: 0,
+  halfWidth: 0.3,
+  halfDepth: 0.2,
+  height: 0.25,
+  /** 左右の移動速度（単位/秒） */
+  speed: 4.5,
+} as const;
+
+export const CAR = {
+  bodyWidth: 1.9,
+  bodyLength: 4.2,
+  /** 車体の底の高さ。これより低い蟹はくぐれる */
+  bodyBottom: 0.45,
+  bodyHeight: 1.1,
+  /** 左右タイヤ中心間の半分 */
+  halfTrack: 0.8,
+  /** 前後タイヤ中心間の半分 */
+  halfWheelbase: 1.35,
+  tireRadius: 0.35,
+  tireHalfWidth: 0.13,
+  speed: 16,
+  /** 出現間隔（秒） */
+  spawnInterval: 1.1,
+  /** 同時に存在できる最大台数（描画プール数） */
+  maxCars: 10,
+} as const;
+
+export const STORAGE_KEY = "yokoaruki:corpses";
+export const MAX_CORPSES = 200;
