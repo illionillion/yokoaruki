@@ -5,15 +5,21 @@ export const CAMERA = {
   /** 注視点（x は蟹に合わせる） */
   lookAt: [0, 0.3, -20],
   fov: 60,
-  /** 左右追従の速さ（大きいほどすぐ追いつく、1/秒） */
-  followRate: 12,
 } as const;
 
+export type CameraPose = {
+  position: [number, number, number];
+  lookAt: [number, number, number];
+};
+
 /**
- * カメラの x を蟹の x へ近づける。
- * 奥から来るタイヤの位置は錯覚で見誤りやすいので、常に蟹の真後ろから見るようにする。
+ * 蟹の x からカメラの位置と注視点を求める。
+ * 奥から来るタイヤの位置は錯覚で見誤りやすいので、常に蟹の真後ろから見る。
+ * 補間はせず x をそのまま合わせるので、止まったときの行き過ぎ（揺れ戻し）は起きない。
+ * 本体と注視点は同じ x を使い、ずれる速さの違いを作らない。
  */
-export function followCameraX(currentX: number, crabX: number, dt: number): number {
-  const t = 1 - Math.exp(-CAMERA.followRate * Math.max(0, dt));
-  return currentX + (crabX - currentX) * t;
+export function cameraPoseFor(crabX: number, crabZ: number): CameraPose {
+  const [, y, z] = CAMERA.offset;
+  const [, ly, lz] = CAMERA.lookAt;
+  return { position: [crabX, y, crabZ + z], lookAt: [crabX, ly, lz] };
 }

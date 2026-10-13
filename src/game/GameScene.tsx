@@ -2,7 +2,7 @@ import { PerspectiveCamera } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useRef, type RefObject } from "react";
 import type { Group, Mesh, PerspectiveCamera as PerspectiveCameraImpl } from "three";
-import { CAMERA, followCameraX } from "./camera.ts";
+import { CAMERA, cameraPoseFor } from "./camera.ts";
 import { CAR, CRAB, ROAD } from "./constants.ts";
 import { step, type Corpse, type Direction, type GameState } from "./logic.ts";
 
@@ -12,21 +12,6 @@ type Props = {
   corpses: readonly Corpse[];
   onGameOver: (state: GameState) => void;
 };
-
-function CameraRig({ stateRef }: { stateRef: RefObject<GameState> }) {
-  const ref = useRef<PerspectiveCameraImpl>(null);
-  useFrame((_, delta) => {
-    const camera = ref.current;
-    if (!camera) return;
-    const crabX = stateRef.current.crabX;
-    const x = followCameraX(camera.position.x, crabX, Math.min(delta, 0.05));
-    const [, y, z] = CAMERA.offset;
-    camera.position.set(x, y, CRAB.z + z);
-    const [, ly, lz] = CAMERA.lookAt;
-    camera.lookAt(x, ly, lz);
-  });
-  return <PerspectiveCamera ref={ref} makeDefault position={[...CAMERA.offset]} fov={CAMERA.fov} />;
-}
 
 /** 仮置きの車: 車体の箱 + 円柱タイヤ 4 本 */
 function CarModel() {
@@ -56,11 +41,20 @@ function CarModel() {
 export function GameScene({ stateRef, directionRef, corpses, onGameOver }: Props) {
   const crabRef = useRef<Mesh>(null);
   const carRefs = useRef<(Group | null)[]>([]);
+  const cameraRef = useRef<PerspectiveCameraImpl>(null);
 
   useFrame((_, delta) => {
     const prev = stateRef.current;
     const next = step(prev, Math.min(delta, 0.05), directionRef.current);
     stateRef.current = next;
+
+    // 蟹を動かしたのと同じフレームでカメラを合わせる（1 フレーム遅れも作らない）
+    const camera = cameraRef.current;
+    if (camera) {
+      const pose = cameraPoseFor(next.crabX, CRAB.z);
+      camera.position.set(...pose.position);
+      camera.lookAt(...pose.lookAt);
+    }
 
     if (crabRef.current) {
       crabRef.current.position.x = next.crabX;
@@ -78,7 +72,12 @@ export function GameScene({ stateRef, directionRef, corpses, onGameOver }: Props
 
   return (
     <>
-      <CameraRig stateRef={stateRef} />
+      <PerspectiveCamera
+        ref={cameraRef}
+        makeDefault
+        position={cameraPoseFor(0, CRAB.z).position}
+        fov={CAMERA.fov}
+      />
       <color attach="background" args={["#9ad3f5"]} />
       <fog attach="fog" args={["#9ad3f5", 30, 75]} />
       <ambientLight intensity={0.7} />

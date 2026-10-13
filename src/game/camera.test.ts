@@ -1,20 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { followCameraX } from "./camera.ts";
+import { cameraPoseFor } from "./camera.ts";
+import { createInitialState, step, type Direction } from "./logic.ts";
 
 describe("カメラの左右追従", () => {
-  it("蟹の方向へ近づくが、通り越さない", () => {
-    const x = followCameraX(0, 2, 1 / 60);
-    expect(x).toBeGreaterThan(0);
-    expect(x).toBeLessThan(2);
+  it("カメラ本体と注視点の x は常に蟹の x と一致する", () => {
+    const pose = cameraPoseFor(1.25, 0);
+    expect(pose.position[0]).toBe(1.25);
+    expect(pose.lookAt[0]).toBe(1.25);
   });
 
-  it("時間が経てば蟹の真後ろに追いつく", () => {
-    let x = 0;
-    for (let i = 0; i < 120; i++) x = followCameraX(x, -3, 1 / 60);
-    expect(x).toBeCloseTo(-3, 3);
-  });
-
-  it("dt が 0 なら動かない", () => {
-    expect(followCameraX(1, 3, 0)).toBe(1);
+  it("移動して止まっても、カメラは移動方向に行き過ぎない", () => {
+    let state = { ...createInitialState(), crabX: 0 };
+    const inputs: Direction[] = [...Array<Direction>(30).fill(1), ...Array<Direction>(30).fill(0)];
+    const xs: number[] = [];
+    for (const dir of inputs) {
+      state = step(state, 1 / 60, dir, () => 0.99);
+      state = { ...state, cars: [] };
+      xs.push(cameraPoseFor(state.crabX, 0).position[0]);
+    }
+    const stoppedX = state.crabX;
+    // 単調非減少で、最終位置を超えない
+    expect(Math.max(...xs)).toBe(stoppedX);
+    expect(xs).toEqual([...xs].sort((a, b) => a - b));
+    expect(xs.slice(30).every((x) => x === stoppedX)).toBe(true);
   });
 });
