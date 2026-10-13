@@ -1,58 +1,19 @@
-/** カメラ位置のプリセット。蟹は原点付近、車は奥（-z）から手前へ来る */
-export type CameraPreset = {
-  id: string;
-  label: string;
-  position: [number, number, number];
-  lookAt: [number, number, number];
-  fov: number;
-};
+/** 正面視点のカメラ。蟹のちょっと上（車のフロント下くらい）から奥を見る */
+export const CAMERA = {
+  /** 蟹からの相対位置 */
+  offset: [0, 0.55, 2.4],
+  /** 注視点（x は蟹に合わせる） */
+  lookAt: [0, 0.3, -20],
+  fov: 60,
+  /** 左右追従の速さ（大きいほどすぐ追いつく、1/秒） */
+  followRate: 12,
+} as const;
 
-export const CAMERA_PRESETS = [
-  {
-    // 車のフロント下端くらいの高さ。基本の画角
-    id: "low",
-    label: "蟹のちょっと上（標準）",
-    position: [0, 0.55, 2.4],
-    lookAt: [0, 0.3, -20],
-    fov: 60,
-  },
-  {
-    id: "mid",
-    label: "やや高め",
-    position: [0, 1.6, 4],
-    lookAt: [0, 0, -15],
-    fov: 60,
-  },
-  {
-    id: "high",
-    label: "斜め上から",
-    position: [0, 6, 7],
-    lookAt: [0, 0, -6],
-    fov: 55,
-  },
-  {
-    id: "side",
-    label: "横から（道路を横向きに見る）",
-    position: [9, 2.5, 3],
-    lookAt: [0, 0, -4],
-    fov: 55,
-  },
-] as const satisfies readonly CameraPreset[];
-
-export type CameraPresetId = (typeof CAMERA_PRESETS)[number]["id"];
-
-export const DEFAULT_CAMERA_ID: CameraPresetId = "low";
-
-export function findCameraIndex(id: string | null | undefined): number {
-  const index = CAMERA_PRESETS.findIndex((p) => p.id === id);
-  return index === -1 ? 0 : index;
-}
-
-/** `?cam=high` のようなクエリからプリセットを選ぶ */
-export function cameraIndexFromSearch(search: string): number {
-  return findCameraIndex(new URLSearchParams(search).get("cam"));
-}
-
-export function nextCameraIndex(index: number): number {
-  return (index + 1) % CAMERA_PRESETS.length;
+/**
+ * カメラの x を蟹の x へ近づける。
+ * 奥から来るタイヤの位置は錯覚で見誤りやすいので、常に蟹の真後ろから見るようにする。
+ */
+export function followCameraX(currentX: number, crabX: number, dt: number): number {
+  const t = 1 - Math.exp(-CAMERA.followRate * Math.max(0, dt));
+  return currentX + (crabX - currentX) * t;
 }

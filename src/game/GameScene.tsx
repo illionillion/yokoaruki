@@ -1,27 +1,31 @@
 import { PerspectiveCamera } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useRef, type RefObject } from "react";
+import { useRef, type RefObject } from "react";
 import type { Group, Mesh, PerspectiveCamera as PerspectiveCameraImpl } from "three";
-import { CAMERA_PRESETS } from "./camera.ts";
+import { CAMERA, followCameraX } from "./camera.ts";
 import { CAR, CRAB, ROAD } from "./constants.ts";
 import { step, type Corpse, type Direction, type GameState } from "./logic.ts";
 
 type Props = {
   stateRef: RefObject<GameState>;
   directionRef: RefObject<Direction>;
-  cameraIndex: number;
   corpses: readonly Corpse[];
   onGameOver: (state: GameState) => void;
 };
 
-function CameraRig({ index }: { index: number }) {
+function CameraRig({ stateRef }: { stateRef: RefObject<GameState> }) {
   const ref = useRef<PerspectiveCameraImpl>(null);
-  const preset = CAMERA_PRESETS[index];
-  useEffect(() => {
-    const [x, y, z] = preset.lookAt;
-    ref.current?.lookAt(x, y, z);
-  }, [preset]);
-  return <PerspectiveCamera ref={ref} makeDefault position={preset.position} fov={preset.fov} />;
+  useFrame((_, delta) => {
+    const camera = ref.current;
+    if (!camera) return;
+    const crabX = stateRef.current.crabX;
+    const x = followCameraX(camera.position.x, crabX, Math.min(delta, 0.05));
+    const [, y, z] = CAMERA.offset;
+    camera.position.set(x, y, CRAB.z + z);
+    const [, ly, lz] = CAMERA.lookAt;
+    camera.lookAt(x, ly, lz);
+  });
+  return <PerspectiveCamera ref={ref} makeDefault position={[...CAMERA.offset]} fov={CAMERA.fov} />;
 }
 
 /** 仮置きの車: 車体の箱 + 円柱タイヤ 4 本 */
@@ -49,7 +53,7 @@ function CarModel() {
   );
 }
 
-export function GameScene({ stateRef, directionRef, cameraIndex, corpses, onGameOver }: Props) {
+export function GameScene({ stateRef, directionRef, corpses, onGameOver }: Props) {
   const crabRef = useRef<Mesh>(null);
   const carRefs = useRef<(Group | null)[]>([]);
 
@@ -74,7 +78,7 @@ export function GameScene({ stateRef, directionRef, cameraIndex, corpses, onGame
 
   return (
     <>
-      <CameraRig index={cameraIndex} />
+      <CameraRig stateRef={stateRef} />
       <color attach="background" args={["#9ad3f5"]} />
       <fog attach="fog" args={["#9ad3f5", 30, 75]} />
       <ambientLight intensity={0.7} />

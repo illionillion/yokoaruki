@@ -1,6 +1,5 @@
 import { Canvas } from "@react-three/fiber";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CAMERA_PRESETS, cameraIndexFromSearch, nextCameraIndex } from "./camera.ts";
 import { createInitialState, type Corpse, type GameState } from "./logic.ts";
 import { GameScene } from "./GameScene.tsx";
 import { addCorpse, loadCorpses } from "./storage.ts";
@@ -12,11 +11,9 @@ export function Game() {
   const [phase, setPhase] = useState<GameState["phase"]>("playing");
   const [score, setScore] = useState(0);
   const [corpses, setCorpses] = useState<Corpse[]>(() => loadCorpses());
-  const [cameraIndex, setCameraIndex] = useState(() =>
-    cameraIndexFromSearch(window.location.search)
-  );
 
   const restart = useCallback(() => {
+    if (stateRef.current.phase !== "gameover") return;
     stateRef.current = createInitialState();
     setPhase("playing");
   }, []);
@@ -29,15 +26,14 @@ export function Game() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // 開発用: C でカメラ切り替え
-      if (e.key === "c" || e.key === "C") setCameraIndex(nextCameraIndex);
-      if (stateRef.current.phase === "gameover" && (e.key === "Enter" || e.key === " ")) restart();
+      if (e.key !== "Enter" && e.key !== " ") return;
+      // ボタンにフォーカスがあると click も発火して 2 回リスタートするので既定動作を止める
+      e.preventDefault();
+      if (!e.repeat) restart();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [restart]);
-
-  const preset = CAMERA_PRESETS[cameraIndex];
 
   return (
     <main className="game" {...pointerHandlers}>
@@ -45,14 +41,13 @@ export function Game() {
         <GameScene
           stateRef={stateRef}
           directionRef={directionRef}
-          cameraIndex={cameraIndex}
           corpses={corpses}
           onGameOver={handleGameOver}
         />
       </Canvas>
       <div className="hud">
         <h1>よこあるき</h1>
-        <p>← → / 画面の左右タップで横歩き ・ カメラ: {preset.id}（C で切替）</p>
+        <p>← → / 画面の左右タップで横歩き</p>
       </div>
       {phase === "gameover" && (
         <div className="gameover" role="dialog" aria-label="ゲームオーバー">
