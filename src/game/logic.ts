@@ -1,4 +1,4 @@
-import { CAR, CRAB, ROAD } from "./constants.ts";
+import { CAR, CRAB, CROSSING, ROAD } from "./constants.ts";
 
 export type Car = {
   id: number;
@@ -13,7 +13,7 @@ export type Tire = { x: number; z: number };
 
 export type Corpse = { x: number; z: number };
 
-export type Phase = "playing" | "gameover";
+export type Phase = "playing" | "gameover" | "cleared";
 
 export type GameState = {
   phase: Phase;
@@ -21,7 +21,6 @@ export type GameState = {
   cars: Car[];
   nextCarId: number;
   spawnTimer: number;
-  elapsed: number;
   /** 当たった位置（ゲームオーバー時のみ） */
   hitAt: Corpse | null;
 };
@@ -32,11 +31,10 @@ export type Direction = -1 | 0 | 1;
 export function createInitialState(): GameState {
   return {
     phase: "playing",
-    crabX: 0,
+    crabX: CROSSING.startX,
     cars: [],
     nextCarId: 1,
     spawnTimer: 0.5,
-    elapsed: 0,
     hitAt: null,
   };
 }
@@ -68,9 +66,13 @@ export function findHit(crabX: number, cars: readonly Car[]): Tire | null {
   return null;
 }
 
+/** 蟹は出発位置からゴールまでの間だけ動ける */
 export function clampCrabX(x: number): number {
-  const limit = ROAD.width / 2 - CRAB.halfWidth;
-  return Math.min(limit, Math.max(-limit, x));
+  return Math.min(CROSSING.goalX, Math.max(CROSSING.startX, x));
+}
+
+export function isAtGoal(crabX: number): boolean {
+  return crabX >= CROSSING.goalX;
 }
 
 /** 車が道路からはみ出さない範囲でランダムな x を返す */
@@ -108,12 +110,12 @@ export function step(
     cars,
     nextCarId,
     spawnTimer,
-    elapsed: state.elapsed + dt,
   };
 
   const tire = findHit(crabX, cars);
   if (tire) {
     return { ...next, phase: "gameover", hitAt: { x: crabX, z: CRAB.z } };
   }
+  if (isAtGoal(crabX)) return { ...next, phase: "cleared" };
   return next;
 }

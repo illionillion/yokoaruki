@@ -3,14 +3,15 @@ import { useFrame } from "@react-three/fiber";
 import { useRef, type RefObject } from "react";
 import type { Group, Mesh, PerspectiveCamera as PerspectiveCameraImpl } from "three";
 import { CAMERA, cameraPoseFor } from "./camera.ts";
-import { CAR, CRAB, ROAD } from "./constants.ts";
+import { CAR, CRAB, CROSSING, ROAD } from "./constants.ts";
 import { step, type Corpse, type Direction, type GameState } from "./logic.ts";
 
 type Props = {
   stateRef: RefObject<GameState>;
   directionRef: RefObject<Direction>;
   corpses: readonly Corpse[];
-  onGameOver: (state: GameState) => void;
+  /** ゲームオーバーかクリアになった瞬間に 1 回呼ばれる */
+  onEnd: (state: GameState) => void;
 };
 
 /** 仮置きの車: 車体の箱 + 円柱タイヤ 4 本 */
@@ -38,7 +39,7 @@ function CarModel() {
   );
 }
 
-export function GameScene({ stateRef, directionRef, corpses, onGameOver }: Props) {
+export function GameScene({ stateRef, directionRef, corpses, onEnd }: Props) {
   const crabRef = useRef<Mesh>(null);
   const carRefs = useRef<(Group | null)[]>([]);
   const cameraRef = useRef<PerspectiveCameraImpl>(null);
@@ -58,7 +59,7 @@ export function GameScene({ stateRef, directionRef, corpses, onGameOver }: Props
 
     if (crabRef.current) {
       crabRef.current.position.x = next.crabX;
-      crabRef.current.visible = next.phase === "playing";
+      crabRef.current.visible = next.phase !== "gameover";
     }
     carRefs.current.forEach((group, i) => {
       if (!group) return;
@@ -67,7 +68,7 @@ export function GameScene({ stateRef, directionRef, corpses, onGameOver }: Props
       if (car) group.position.set(car.x, 0, car.z);
     });
 
-    if (prev.phase === "playing" && next.phase === "gameover") onGameOver(next);
+    if (prev.phase === "playing" && next.phase !== "playing") onEnd(next);
   });
 
   return (
@@ -75,7 +76,7 @@ export function GameScene({ stateRef, directionRef, corpses, onGameOver }: Props
       <PerspectiveCamera
         ref={cameraRef}
         makeDefault
-        position={cameraPoseFor(0, CRAB.z).position}
+        position={cameraPoseFor(CROSSING.startX, CRAB.z).position}
         fov={CAMERA.fov}
       />
       <color attach="background" args={["#9ad3f5"]} />
@@ -98,6 +99,15 @@ export function GameScene({ stateRef, directionRef, corpses, onGameOver }: Props
           <meshStandardMaterial color="#d6c49a" />
         </mesh>
       ))}
+
+      {/* ゴールライン（向こう側の歩道） */}
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[CROSSING.goalX, 0.02, -ROAD.length / 2 + 10]}
+      >
+        <planeGeometry args={[0.25, ROAD.length]} />
+        <meshStandardMaterial color="#facc15" />
+      </mesh>
 
       {/* 亡骸（前回までのプレイ分も含む） */}
       {corpses.map((c, i) => (

@@ -9,19 +9,17 @@ export function Game() {
   const stateRef = useRef<GameState>(createInitialState());
   const { directionRef, pointerHandlers } = useControls();
   const [phase, setPhase] = useState<GameState["phase"]>("playing");
-  const [score, setScore] = useState(0);
   const [corpses, setCorpses] = useState<Corpse[]>(() => loadCorpses());
 
   const restart = useCallback(() => {
-    if (stateRef.current.phase !== "gameover") return;
+    if (stateRef.current.phase === "playing") return;
     stateRef.current = createInitialState();
     setPhase("playing");
   }, []);
 
-  const handleGameOver = useCallback((state: GameState) => {
-    if (state.hitAt) setCorpses(addCorpse(state.hitAt));
-    setScore(state.elapsed);
-    setPhase("gameover");
+  const handleEnd = useCallback((state: GameState) => {
+    if (state.phase === "gameover" && state.hitAt) setCorpses(addCorpse(state.hitAt));
+    setPhase(state.phase);
   }, []);
 
   useEffect(() => {
@@ -42,19 +40,21 @@ export function Game() {
           stateRef={stateRef}
           directionRef={directionRef}
           corpses={corpses}
-          onGameOver={handleGameOver}
+          onEnd={handleEnd}
         />
       </Canvas>
       <div className="hud">
         <h1>よこあるき</h1>
-        <p>← → / 画面の左右タップで横歩き</p>
+        <p>← → / 画面の左右タップで横歩き ・ 向こう側の歩道（黄色い線）まで渡ればクリア</p>
       </div>
-      {phase === "gameover" && (
-        <div className="gameover" role="dialog" aria-label="ゲームオーバー">
-          <p className="gameover-title">ぺしゃんこ</p>
-          <p>
-            {score.toFixed(1)} 秒 生き延びた ・ 亡骸 {corpses.length} 体
-          </p>
+      {phase !== "playing" && (
+        <div
+          className={`result ${phase}`}
+          role="dialog"
+          aria-label={phase === "cleared" ? "クリア" : "ゲームオーバー"}
+        >
+          <p className="result-title">{phase === "cleared" ? "わたりきった！" : "ぺしゃんこ"}</p>
+          <p>{phase === "cleared" ? "道路の向こう側に着いた" : `亡骸 ${corpses.length} 体`}</p>
           <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={restart}>
             もう一回（Enter）
           </button>
