@@ -1,10 +1,22 @@
 import { PerspectiveCamera } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { useRef, type RefObject } from "react";
-import type { Group, Mesh, PerspectiveCamera as PerspectiveCameraImpl } from "three";
+import { useMemo, useRef, type RefObject } from "react";
+import type { Group, PerspectiveCamera as PerspectiveCameraImpl } from "three";
 import { CAMERA, cameraPoseFor } from "./camera.ts";
-import { CAR, CRAB, CROSSING, ROAD } from "./constants.ts";
+import { CRAB, CROSSING, MAX_CARS, ROAD, VEHICLES, type VehicleKind } from "./constants.ts";
+import {
+  EFFECTS,
+  makeParticles,
+  particleAt,
+  shakeOffset,
+  squashScale,
+  stackCorpses,
+  type Particle,
+} from "./effects.ts";
 import { step, type Corpse, type Direction, type GameState } from "./logic.ts";
+import { seeded } from "./random.ts";
+import { CRAB_MODELS } from "./models/crab.tsx";
+import { VehicleModel } from "./models/vehicle.tsx";
 
 type Props = {
   stateRef: RefObject<GameState>;
@@ -14,61 +26,83 @@ type Props = {
   onEnd: (state: GameState) => void;
 };
 
-/** 仮置きの車: 車体の箱 + 円柱タイヤ 4 本 */
-function CarModel() {
-  const tireY = CAR.tireRadius;
-  const offsets: [number, number][] = [
-    [-CAR.halfTrack, -CAR.halfWheelbase],
-    [CAR.halfTrack, -CAR.halfWheelbase],
-    [-CAR.halfTrack, CAR.halfWheelbase],
-    [CAR.halfTrack, CAR.halfWheelbase],
-  ];
-  return (
-    <>
-      <mesh position={[0, CAR.bodyBottom + CAR.bodyHeight / 2, 0]}>
-        <boxGeometry args={[CAR.bodyWidth, CAR.bodyHeight, CAR.bodyLength]} />
-        <meshStandardMaterial color="#3b82f6" />
-      </mesh>
-      {offsets.map(([x, z]) => (
-        <mesh key={`${x},${z}`} position={[x, tireY, z]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[CAR.tireRadius, CAR.tireRadius, CAR.tireHalfWidth * 2, 16]} />
-          <meshStandardMaterial color="#111" />
-        </mesh>
-      ))}
-    </>
-  );
-}
+const KINDS: VehicleKind[] = ["car", "fast", "truck"];
+
+/** カニ汁の粒は少しゆっくり飛ばす（スローモーションに合わせる） */
+const PARTICLE_TIME_SCALE = 0.5;
+
+/** 粒の見た目の大きさ（描画用に固定）。飛び方は当たるたびに引き直す */
+const PARTICLE_SIZES = makeParticles(seeded(1)).map((p) => p.size);
 
 export function GameScene({ stateRef, directionRef, corpses, onEnd }: Props) {
-  const crabRef = useRef<Mesh>(null);
+  const crabRef = useRef<Group>(null);
   const carRefs = useRef<(Group | null)[]>([]);
+  const kindRefs = useRef<(Group | null)[][]>([]);
   const cameraRef = useRef<PerspectiveCameraImpl>(null);
+  const particleGroupRef = useRef<Group>(null);
+  const particleRefs = useRef<(Group | null)[]>([]);
+  const particlesRef = useRef<Particle[]>([]);
+  const newestCorpseRef = useRef<Group | null>(null);
+
+  const stacked = useMemo(() => stackCorpses(corpses), [corpses]);
+  const AliveCrab = CRAB_MODELS.alive;
+  const SquashedCrab = CRAB_MODELS.squashed;
 
   useFrame((_, delta) => {
     const prev = stateRef.current;
     const next = step(prev, Math.min(delta, 0.05), directionRef.current);
     stateRef.current = next;
+    const over = next.phase === "gameover";
+    const t = next.phaseTime;
+    const ended = prev.phase === "playing" && next.phase !== "playing";
+    // 当たるたびにカニ汁の飛び方を引き直す
+    if (ended && over) particlesRef.current = makeParticles(Math.random);
 
     // 蟹を動かしたのと同じフレームでカメラを合わせる（1 フレーム遅れも作らない）
     const camera = cameraRef.current;
     if (camera) {
       const pose = cameraPoseFor(next.crabX, CRAB.z);
-      camera.position.set(...pose.position);
-      camera.lookAt(...pose.lookAt);
+      const [sx, sy] = over ? shakeOffset(t) : [0, 0];
+      camera.position.set(pose.position[0] + sx, pose.position[1] + sy, pose.position[2]);
+      camera.lookAt(pose.lookAt[0] + sx, pose.lookAt[1] + sy, pose.lookAt[2]);
     }
 
-    if (crabRef.current) {
-      crabRef.current.position.x = next.crabX;
-      crabRef.current.visible = next.phase !== "gameover";
+    const crab = crabRef.current;
+    if (crab) {
+      crab.position.x = next.crabX;
+      const [spread, height] = over ? squashScale(t) : [1, 1];
+      crab.scale.set(spread, height, spread);
+      // 潰れきったら、積まれた亡骸の方に入れ替える
+      crab.visible = !over || t < EFFECTS.squashSeconds;
     }
-    carRefs.current.forEach((group, i) => {
-      if (!group) return;
+    if (newestCorpseRef.current) {
+      newestCorpseRef.current.visible = !over || t >= EFFECTS.squashSeconds;
+    }
+
+    const group = particleGroupRef.current;
+    if (group) {
+      group.visible = over;
+      if (over && next.hitAt) {
+        group.position.set(next.hitAt.x, 0, next.hitAt.z);
+        particlesRef.current.forEach((p, i) => {
+          particleRefs.current[i]?.position.set(...particleAt(p, t * PARTICLE_TIME_SCALE));
+        });
+      }
+    }
+
+    carRefs.current.forEach((g, i) => {
+      if (!g) return;
       const car = next.cars[i];
-      group.visible = Boolean(car);
-      if (car) group.position.set(car.x, 0, car.z);
+      g.visible = Boolean(car);
+      if (!car) return;
+      g.position.set(car.x, 0, car.z);
+      g.rotation.y = car.direction === 1 ? 0 : Math.PI;
+      kindRefs.current[i]?.forEach((k, j) => {
+        if (k) k.visible = KINDS[j] === car.kind;
+      });
     });
 
-    if (prev.phase === "playing" && next.phase !== "playing") onEnd(next);
+    if (ended) onEnd(next);
   });
 
   return (
@@ -78,6 +112,7 @@ export function GameScene({ stateRef, directionRef, corpses, onEnd }: Props) {
         makeDefault
         position={cameraPoseFor(CROSSING.startX, CRAB.z).position}
         fov={CAMERA.fov}
+        near={0.05}
       />
       <color attach="background" args={["#9ad3f5"]} />
       <fog attach="fog" args={["#9ad3f5", 30, 75]} />
@@ -89,6 +124,20 @@ export function GameScene({ stateRef, directionRef, corpses, onEnd }: Props) {
         <planeGeometry args={[ROAD.width, ROAD.length]} />
         <meshStandardMaterial color="#444" />
       </mesh>
+      {Array.from({ length: ROAD.lanes - 1 }, (_, i) => (
+        <mesh
+          key={i}
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[
+            -ROAD.width / 2 + (ROAD.width / ROAD.lanes) * (i + 1),
+            0.005,
+            -ROAD.length / 2 + 10,
+          ]}
+        >
+          <planeGeometry args={[0.08, ROAD.length]} />
+          <meshStandardMaterial color="#cbd5e1" />
+        </mesh>
+      ))}
       {[-1, 1].map((side) => (
         <mesh
           key={side}
@@ -109,21 +158,41 @@ export function GameScene({ stateRef, directionRef, corpses, onEnd }: Props) {
         <meshStandardMaterial color="#facc15" />
       </mesh>
 
-      {/* 亡骸（前回までのプレイ分も含む） */}
-      {corpses.map((c, i) => (
-        <mesh key={i} rotation={[-Math.PI / 2, 0, 0]} position={[c.x, 0.015, c.z]}>
-          <circleGeometry args={[CRAB.halfWidth * 1.6, 20]} />
-          <meshStandardMaterial color="#8b1a1a" />
-        </mesh>
+      {/* 亡骸の山（前回までのプレイ分も含む。同じ場所には積み重なる） */}
+      {stacked.map((c, i) => (
+        <group
+          key={i}
+          position={[c.x, 0.015 + c.y, c.z]}
+          rotation={[0, c.rotation, 0]}
+          ref={i === stacked.length - 1 ? newestCorpseRef : undefined}
+        >
+          <SquashedCrab />
+        </group>
       ))}
 
-      {/* 蟹（仮置きの箱） */}
-      <mesh ref={crabRef} position={[0, CRAB.height / 2, CRAB.z]}>
-        <boxGeometry args={[CRAB.halfWidth * 2, CRAB.height, CRAB.halfDepth * 2]} />
-        <meshStandardMaterial color="#e2483d" />
-      </mesh>
+      {/* 蟹 */}
+      <group ref={crabRef} position={[CROSSING.startX, 0, CRAB.z]}>
+        <AliveCrab />
+      </group>
 
-      {Array.from({ length: CAR.maxCars }, (_, i) => (
+      {/* カニ汁 */}
+      <group ref={particleGroupRef} visible={false}>
+        {PARTICLE_SIZES.map((size, i) => (
+          <group
+            key={i}
+            ref={(g) => {
+              particleRefs.current[i] = g;
+            }}
+          >
+            <mesh>
+              <sphereGeometry args={[size, 6, 6]} />
+              <meshStandardMaterial color={i % 3 === 0 ? "#ffd166" : "#ff5a1f"} />
+            </mesh>
+          </group>
+        ))}
+      </group>
+
+      {Array.from({ length: MAX_CARS }, (_, i) => (
         <group
           key={i}
           visible={false}
@@ -131,7 +200,17 @@ export function GameScene({ stateRef, directionRef, corpses, onEnd }: Props) {
             carRefs.current[i] = g;
           }}
         >
-          <CarModel />
+          {KINDS.map((kind, j) => (
+            <group
+              key={kind}
+              visible={false}
+              ref={(g) => {
+                (kindRefs.current[i] ??= [])[j] = g;
+              }}
+            >
+              <VehicleModel spec={VEHICLES[kind]} cab={kind === "truck"} />
+            </group>
+          ))}
         </group>
       ))}
     </>
