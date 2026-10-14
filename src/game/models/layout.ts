@@ -26,7 +26,7 @@ export function chassisBeams(spec: VehicleSpec): Box[] {
  * 車体がカメラに重なるか（車の箱をカメラの近さ margin だけ膨らませて判定）。
  * 重なる車は描画しない。奥向きの車はカメラの後ろから出て蟹の上を通るので、
  * そのままだとカメラが車体の中に入って画面が車の色で埋まる。
- * カメラは普通の車・速い車の屋根より高いので、隠れるのは背の高いトラックだけ
+ * トラックは車体の底がカメラより高いので隠れず、下をくぐる様子が見える
  */
 export function blocksCamera(
   car: Pick<Car, "kind" | "x" | "z">,

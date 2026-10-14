@@ -1,13 +1,7 @@
 import { PerspectiveCamera } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef, type RefObject } from "react";
-import {
-  Color,
-  type Group,
-  type Mesh,
-  type MeshBasicMaterial,
-  type PerspectiveCamera as PerspectiveCameraImpl,
-} from "three";
+import { type Group, type Mesh, type PerspectiveCamera as PerspectiveCameraImpl } from "three";
 import { CAMERA, cameraPoseFor } from "./camera.ts";
 import { CRAB, CROSSING, MAX_CARS, ROAD, VEHICLES, type VehicleKind } from "./constants.ts";
 import {
@@ -36,10 +30,8 @@ type Props = {
 
 const KINDS: VehicleKind[] = ["car", "fast", "truck"];
 
-/** 轍の予告の色: まだ先は黄色、もう来るなら赤 */
-const TRACK_FAR = new Color("#ffd400");
-const TRACK_NEAR = new Color("#ff2a00");
-const TRACK_POOL = MAX_CARS * 2;
+/** 出す車輪の列は最大でも蟹の左右 2 本ずつ */
+const TRACK_POOL = 4;
 
 /** カニ汁の粒は少しゆっくり飛ばす（スローモーションに合わせる） */
 const PARTICLE_TIME_SCALE = 0.5;
@@ -57,7 +49,6 @@ export function GameScene({ stateRef, directionRef, corpses, onEnd }: Props) {
   const particlesRef = useRef<Particle[]>([]);
   const newestCorpseRef = useRef<Group | null>(null);
   const trackRefs = useRef<(Mesh | null)[]>([]);
-  const dangerRefs = useRef<(Mesh | null)[]>([]);
 
   const stacked = useMemo(() => stackCorpses(corpses), [corpses]);
   const AliveCrab = CRAB_MODELS.alive;
@@ -118,22 +109,15 @@ export function GameScene({ stateRef, directionRef, corpses, onEnd }: Props) {
       });
     });
 
-    // 近づく車の車輪の列を地面に予告する（後ろから来る車も、蟹の前まで伸ばして見せる）
-    const tracks = next.phase === "playing" ? wheelTracks(next.cars) : [];
+    // もうすぐ蟹の列に来る車の車輪の列だけ、蟹のまわりに短く出す
+    const tracks = next.phase === "playing" ? wheelTracks(next.cars, next.crabX) : [];
     trackRefs.current.forEach((m, i) => {
       if (!m) return;
       const tr = tracks[i];
       m.visible = Boolean(tr);
-      const d = dangerRefs.current[i];
-      if (d) d.visible = Boolean(tr?.danger);
       if (!tr) return;
-      const length = Math.abs(tr.zTo - tr.zFrom);
       m.position.set(tr.x, 0.008, (tr.zFrom + tr.zTo) / 2);
-      m.scale.set(1, length, 1);
-      const mat = m.material as MeshBasicMaterial;
-      mat.color.copy(TRACK_FAR).lerp(TRACK_NEAR, tr.urgency);
-      mat.opacity = 0.25 + 0.5 * tr.urgency;
-      d?.position.set(tr.x, 0.011, CRAB.z);
+      m.scale.set(1, Math.abs(tr.zTo - tr.zFrom), 1);
     });
 
     if (ended) onEnd(next);
@@ -192,7 +176,7 @@ export function GameScene({ stateRef, directionRef, corpses, onEnd }: Props) {
         <meshStandardMaterial color="#facc15" />
       </mesh>
 
-      {/* 轍の予告と、蟹の列に出す危険の印 */}
+      {/* もうすぐ来る車の車輪の列 */}
       {Array.from({ length: TRACK_POOL }, (_, i) => (
         <mesh
           key={`track${i}`}
@@ -202,21 +186,8 @@ export function GameScene({ stateRef, directionRef, corpses, onEnd }: Props) {
             trackRefs.current[i] = m;
           }}
         >
-          <planeGeometry args={[0.32, 1]} />
-          <meshBasicMaterial color="#ffd400" transparent opacity={0.4} depthWrite={false} />
-        </mesh>
-      ))}
-      {Array.from({ length: TRACK_POOL }, (_, i) => (
-        <mesh
-          key={`danger${i}`}
-          visible={false}
-          rotation={[-Math.PI / 2, 0, 0]}
-          ref={(m) => {
-            dangerRefs.current[i] = m;
-          }}
-        >
-          <planeGeometry args={[0.55, 1.4]} />
-          <meshBasicMaterial color="#ff0000" transparent opacity={0.85} depthWrite={false} />
+          <planeGeometry args={[0.3, 1]} />
+          <meshBasicMaterial color="#ffe600" transparent opacity={0.85} depthWrite={false} />
         </mesh>
       ))}
 

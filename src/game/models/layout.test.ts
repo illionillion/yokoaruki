@@ -7,9 +7,9 @@ import { blocksCamera, chassisBeams } from "./layout.ts";
 const cam = cameraPoseFor(0, CRAB.z).position;
 
 describe("カメラと車体", () => {
-  it("普通の車・速い車はカメラより低いので、真下を通っても隠さない（消えたり現れたりしない）", () => {
-    expect(blocksCamera({ kind: "car", x: 0, z: cam[2] }, cam)).toBe(false);
-    expect(blocksCamera({ kind: "fast", x: 0.5, z: cam[2] + 1 }, cam)).toBe(false);
+  it("普通の車・速い車がカメラの位置を通るときは重なる（隠す）", () => {
+    expect(blocksCamera({ kind: "car", x: 0, z: cam[2] }, cam)).toBe(true);
+    expect(blocksCamera({ kind: "fast", x: 0.5, z: cam[2] + 1 }, cam)).toBe(true);
   });
 
   it("離れた車・隣の車線の車は隠さない", () => {
@@ -17,9 +17,8 @@ describe("カメラと車体", () => {
     expect(blocksCamera({ kind: "car", x: 4, z: cam[2] }, cam)).toBe(false);
   });
 
-  it("背の高いトラックはカメラの位置を通る間だけ隠す", () => {
-    expect(blocksCamera({ kind: "truck", x: 0, z: cam[2] }, cam)).toBe(true);
-    expect(blocksCamera({ kind: "truck", x: 0, z: cam[2] - 8 }, cam)).toBe(false);
+  it("トラックは車体の底がカメラより高いので隠さない（下をくぐる様子が見える）", () => {
+    expect(blocksCamera({ kind: "truck", x: 0, z: cam[2] }, cam)).toBe(false);
   });
 });
 

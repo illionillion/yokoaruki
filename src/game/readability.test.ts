@@ -42,27 +42,40 @@ describe("蟹の列に来るまでの秒数", () => {
   });
 });
 
-describe("轍の予告", () => {
-  it("近づく車だけ、左右の車輪の列に 1 本ずつ出る", () => {
-    const tracks = wheelTracks([car(-15, 1, 2), car(-60, 1, -2), car(10, 1)]);
-    expect(tracks.map((t) => t.x)).toEqual([
-      2 - VEHICLES.car.halfTrack,
-      2 + VEHICLES.car.halfTrack,
-    ]);
+describe("出す車輪の列を絞る", () => {
+  const ht = VEHICLES.car.halfTrack;
+  const soon = (dist: number) => -(hwb + dist); // 奥から来て dist 進むと前の車軸が蟹の列に来る
+
+  it("1 秒以内に来る車だけ出す", () => {
+    expect(wheelTracks([car(soon(5), 1, 0.5)], 0)).toHaveLength(2);
+    expect(wheelTracks([car(soon(15), 1, 0.5)], 0)).toHaveLength(0);
   });
 
-  it("後ろから来る車の轍は、蟹の列を越えて前（奥）まで伸びる", () => {
-    const [t] = wheelTracks([car(8, -1)]);
-    expect(t.zFrom).toBeCloseTo(8 - hwb);
-    expect(t.zTo).toBe(CRAB.z - TRACKS.extend);
+  it("蟹から遠い車輪の列は出さない", () => {
+    expect(wheelTracks([car(soon(5), 1, 8)], 0)).toHaveLength(0);
   });
 
-  it("近いほど urgency が上がり、danger 秒以内で危険になる", () => {
-    const far = wheelTracks([car(-20, 1)])[0];
-    const near = wheelTracks([car(-hwb - 5, 1)])[0];
-    expect(near.urgency).toBeGreaterThan(far.urgency);
-    expect(far.danger).toBe(false);
-    expect(near.danger).toBe(true);
+  it("蟹の左右それぞれで、一番早く来る車の列だけ出す", () => {
+    const first = { ...car(soon(3), 1, -2), id: 1 };
+    const later = { ...car(soon(8), 1, -2.5), id: 2 };
+    const right = { ...car(soon(6), 1, 2), id: 3 };
+    const tracks = wheelTracks([later, first, right], 0);
+    expect(tracks.map((t) => t.carId).sort()).toEqual([1, 1, 3, 3]);
+    expect(tracks.filter((t) => t.carId === 1).map((t) => t.x)).toEqual([-2 - ht, -2 + ht]);
+  });
+
+  it("蟹をまたぐ車は左右 1 本ずつ出る", () => {
+    const tracks = wheelTracks([car(soon(4), 1, 0)], 0);
+    expect(tracks.map((t) => t.x).sort((a, b) => a - b)).toEqual([-ht, ht]);
+  });
+
+  it("線は蟹の列のまわりの短い区間。後ろから来る車は前にも伸びる", () => {
+    const [fromFar] = wheelTracks([car(soon(4), 1, 0)], 0);
+    expect(Math.min(fromFar.zFrom, fromFar.zTo)).toBe(CRAB.z - TRACKS.near);
+    expect(Math.max(fromFar.zFrom, fromFar.zTo)).toBeLessThan(CRAB.z + 1);
+    const [fromBehind] = wheelTracks([car(hwb + 4, -1, 0)], 0);
+    expect(Math.max(fromBehind.zFrom, fromBehind.zTo)).toBe(CRAB.z + TRACKS.near);
+    expect(Math.min(fromBehind.zFrom, fromBehind.zTo)).toBe(CRAB.z - TRACKS.extend);
   });
 });
 
@@ -70,7 +83,7 @@ describe("難しさは変わらない", () => {
   it("轍の計算は状態を変えず、隙間待ちのクリア数は以前と同じ", () => {
     const s: GameState = createInitialState(seeded(5));
     const copy = structuredClone(s);
-    wheelTracks(s.cars);
+    wheelTracks(s.cars, s.crabX);
     expect(s).toEqual(copy);
     expect(step(s, DT, 0, seeded(1))).toEqual(step(copy, DT, 0, seeded(1)));
     let cleared = 0;
