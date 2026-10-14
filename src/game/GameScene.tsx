@@ -16,6 +16,7 @@ import {
 import { step, type Corpse, type Direction, type GameState } from "./logic.ts";
 import { seeded } from "./random.ts";
 import { CRAB_MODELS } from "./models/crab.tsx";
+import { blocksCamera } from "./models/layout.ts";
 import { VehicleModel } from "./models/vehicle.tsx";
 
 type Props = {
@@ -59,9 +60,9 @@ export function GameScene({ stateRef, directionRef, corpses, onEnd }: Props) {
     if (ended && over) particlesRef.current = makeParticles(Math.random);
 
     // 蟹を動かしたのと同じフレームでカメラを合わせる（1 フレーム遅れも作らない）
+    const pose = cameraPoseFor(next.crabX, CRAB.z);
     const camera = cameraRef.current;
     if (camera) {
-      const pose = cameraPoseFor(next.crabX, CRAB.z);
       const [sx, sy] = over ? shakeOffset(t) : [0, 0];
       camera.position.set(pose.position[0] + sx, pose.position[1] + sy, pose.position[2]);
       camera.lookAt(pose.lookAt[0] + sx, pose.lookAt[1] + sy, pose.lookAt[2]);
@@ -93,7 +94,8 @@ export function GameScene({ stateRef, directionRef, corpses, onEnd }: Props) {
     carRefs.current.forEach((g, i) => {
       if (!g) return;
       const car = next.cars[i];
-      g.visible = Boolean(car);
+      // カメラに重なる車は隠す（カメラが車体の中に入らないように）
+      g.visible = Boolean(car) && !blocksCamera(car, pose.position);
       if (!car) return;
       g.position.set(car.x, 0, car.z);
       g.rotation.y = car.direction === 1 ? 0 : Math.PI;
