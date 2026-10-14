@@ -34,6 +34,43 @@ export function VehicleModel({ spec, cab = false }: { spec: VehicleSpec; cab?: b
           <meshStandardMaterial color="#374151" />
         </mesh>
       ))}
+      {/* 前照灯（前 = +z）と尾灯。向きが一目で分かるように光らせる */}
+      {[-1, 1].map((side) => (
+        <group key={`light${side}`}>
+          <mesh
+            position={[
+              side * spec.bodyWidth * 0.32,
+              spec.bodyBottom + 0.18,
+              spec.bodyLength / 2 + 0.02,
+            ]}
+          >
+            <boxGeometry args={[spec.bodyWidth * 0.22, 0.14, 0.04]} />
+            <meshStandardMaterial color="#fff6c2" emissive="#ffe066" emissiveIntensity={2} />
+          </mesh>
+          <mesh
+            position={[
+              side * spec.bodyWidth * 0.36,
+              spec.bodyBottom + 0.18,
+              -spec.bodyLength / 2 - 0.02,
+            ]}
+          >
+            <boxGeometry args={[spec.bodyWidth * 0.18, 0.14, 0.04]} />
+            <meshStandardMaterial color="#ff3030" emissive="#ff0000" emissiveIntensity={2} />
+          </mesh>
+        </group>
+      ))}
+      {/* タイヤの接地影。地面のどこにタイヤがあるかを見やすくする */}
+      {offsets.map(([x, z]) => (
+        <mesh
+          key={`shadow${x},${z}`}
+          position={[x, 0.012, z]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          scale={[1, 1.6, 1]}
+        >
+          <circleGeometry args={[spec.tireHalfWidth * 2.4, 16]} />
+          <meshBasicMaterial color="#000" transparent opacity={0.75} />
+        </mesh>
+      ))}
       {offsets.map(([x, z]) => (
         <mesh key={`${x},${z}`} position={[x, spec.tireRadius, z]} rotation={[0, 0, Math.PI / 2]}>
           <cylinderGeometry args={[spec.tireRadius, spec.tireRadius, spec.tireHalfWidth * 2, 16]} />
