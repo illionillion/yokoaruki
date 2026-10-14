@@ -1,19 +1,22 @@
 import { Canvas } from "@react-three/fiber";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createInitialState, type Corpse, type GameState } from "./logic.ts";
+import { createInitialState, restartState, type Corpse, type GameState } from "./logic.ts";
 import { GameScene } from "./GameScene.tsx";
 import { addCorpse, loadCorpses } from "./storage.ts";
 import { useControls } from "./useControls.ts";
 
 export function Game() {
-  const stateRef = useRef<GameState>(createInitialState());
+  // 初期状態は交通の空回しを含むので、毎レンダーで作り直さないよう 1 回だけ作る
+  const [initialState] = useState(() => createInitialState());
+  const stateRef = useRef<GameState>(initialState);
   const { directionRef, pointerHandlers } = useControls();
   const [phase, setPhase] = useState<GameState["phase"]>("playing");
   const [corpses, setCorpses] = useState<Corpse[]>(() => loadCorpses());
 
   const restart = useCallback(() => {
     if (stateRef.current.phase === "playing") return;
-    stateRef.current = createInitialState();
+    // 交通はそのまま流し続け、蟹だけ出発位置に戻す（車が瞬間移動して見えないように）
+    stateRef.current = restartState(stateRef.current);
     setPhase("playing");
   }, []);
 

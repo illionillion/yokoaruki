@@ -28,15 +28,34 @@ export type GameState = {
 /** 入力: -1 = 左, 0 = 停止, 1 = 右 */
 export type Direction = -1 | 0 | 1;
 
-export function createInitialState(): GameState {
-  return {
+/** 車が出現してから消えるまでの秒数 */
+export const CAR_LIFETIME = (ROAD.despawnZ - ROAD.spawnZ) / CAR.speed;
+
+/** 開始前に交通を空回しする刻み（秒） */
+const PREWARM_DT = 1 / 60;
+
+/**
+ * 初期状態。車が 1 台もいないと開始直後に押しっぱなしで渡れてしまうので、
+ * 車が手前まで流れきる時間だけ交通を空回しして、最初から車が流れている状態にする
+ */
+export function createInitialState(rng: () => number = Math.random): GameState {
+  let state: GameState = {
     phase: "playing",
     crabX: CROSSING.startX,
     cars: [],
     nextCarId: 1,
-    spawnTimer: 0.5,
+    spawnTimer: 0,
     hitAt: null,
   };
+  for (let t = 0; t < CAR_LIFETIME; t += PREWARM_DT) {
+    state = stepTraffic(state, PREWARM_DT, rng);
+  }
+  return state;
+}
+
+/** リスタート: 流れている交通はそのまま、蟹だけ出発位置（道路の外）に戻す */
+export function restartState(state: GameState): GameState {
+  return { ...state, phase: "playing", crabX: CROSSING.startX, hitAt: null };
 }
 
 /** 車の 4 つのタイヤ中心 */
@@ -81,17 +100,13 @@ export function randomCarX(rng: () => number): number {
   return -limit + rng() * limit * 2;
 }
 
-/** 1 フレーム進める（純粋関数） */
-export function step(
-  state: GameState,
-  dt: number,
-  direction: Direction,
-  rng: () => number = Math.random
-): GameState {
-  if (state.phase !== "playing") return state;
+/** 次に車が出るまでの秒数（平均 CAR.spawnInterval のばらつき付き） */
+function nextSpawnDelay(rng: () => number): number {
+  return CAR.spawnInterval * (0.6 + rng() * 0.8);
+}
 
-  const crabX = clampCrabX(state.crabX + direction * CRAB.speed * dt);
-
+/** 交通（車の移動・出現・消滅）だけを進める。どのフェーズでも動かす */
+export function stepTraffic(state: GameState, dt: number, rng: () => number): GameState {
   let cars = state.cars
     .map((car) => ({ ...car, z: car.z + car.speed * dt }))
     .filter((car) => car.z < ROAD.despawnZ);
@@ -101,18 +116,29 @@ export function step(
   if (spawnTimer <= 0 && cars.length < CAR.maxCars) {
     cars = [...cars, { id: nextCarId, x: randomCarX(rng), z: ROAD.spawnZ, speed: CAR.speed }];
     nextCarId += 1;
-    spawnTimer = CAR.spawnInterval * (0.6 + rng() * 0.8);
+    spawnTimer = nextSpawnDelay(rng);
   }
 
-  const next: GameState = {
-    ...state,
-    crabX,
-    cars,
-    nextCarId,
-    spawnTimer,
-  };
+  return { ...state, cars, nextCarId, spawnTimer };
+}
 
-  const tire = findHit(crabX, cars);
+/**
+ * 1 フレーム進める（純粋関数）。
+ * 交通はゲームオーバー / クリア後も流れ続け、蟹（亡骸）はその場に残る
+ */
+export function step(
+  state: GameState,
+  dt: number,
+  direction: Direction,
+  rng: () => number = Math.random
+): GameState {
+  const traffic = stepTraffic(state, dt, rng);
+  if (state.phase !== "playing") return traffic;
+
+  const crabX = clampCrabX(state.crabX + direction * CRAB.speed * dt);
+  const next: GameState = { ...traffic, crabX };
+
+  const tire = findHit(crabX, next.cars);
   if (tire) {
     return { ...next, phase: "gameover", hitAt: { x: crabX, z: CRAB.z } };
   }
