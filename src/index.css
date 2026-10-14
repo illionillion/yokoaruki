@@ -41,6 +41,70 @@ body,
   font-size: 0.8rem;
 }
 
+.hud-actions {
+  pointer-events: auto;
+}
+
+.reset-corpses {
+  font-size: 0.95rem;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 2px solid #fff;
+  background: #7f1d1d;
+  color: #fff;
+  cursor: pointer;
+}
+
+.confirm-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 40%);
+}
+
+.confirm-box {
+  width: min(90vw, 360px);
+  padding: 20px 22px 16px;
+  border-radius: 14px;
+  background: #fff;
+  color: #1c1917;
+  text-align: center;
+  box-shadow: 0 10px 40px rgb(0 0 0 / 35%);
+}
+
+.confirm-box p {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.confirm-actions button {
+  min-width: 7rem;
+  font-size: 1rem;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.confirm-actions button:first-child {
+  background: #b91c1c;
+  color: #fff;
+  border: none;
+}
+
+.result-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
 .result {
   position: absolute;
   inset: 0;
@@ -65,4 +129,81 @@ body,
 
 .result.cleared {
   background: rgb(250 204 21 / 45%);
+}
+
+/* やられ演出: 画面いっぱいのカニ汁しぶき */
+.splat {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.splat svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.splat-blob {
+  fill: rgb(255 90 31 / 80%);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: splat-in 0.18s cubic-bezier(0.2, 2, 0.4, 1) both;
+}
+
+.splat-drip {
+  fill: rgb(220 60 20 / 85%);
+  transform-origin: top;
+  animation: splat-drip 1.6s ease-in both;
+}
+
+.splat-text {
+  position: absolute;
+  top: 18%;
+  width: 100%;
+  margin: 0;
+  text-align: center;
+  font-size: clamp(2.5rem, 9vw, 6rem);
+  font-weight: 900;
+  color: #fff200;
+  -webkit-text-stroke: 3px #7a1600;
+  transform: rotate(-8deg);
+  animation: splat-text 0.5s cubic-bezier(0.2, 2.2, 0.4, 1) both;
+}
+
+@keyframes splat-in {
+  from {
+    transform: scale(0);
+  }
+}
+
+@keyframes splat-drip {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes splat-text {
+  from {
+    transform: rotate(-30deg) scale(4);
+    opacity: 0;
+  }
+}
+
+/* ゲームオーバー画面は、スローモーションとしぶきを見せてから出す */
+.result.gameover {
+  background: rgb(60 0 0 / 35%);
+  animation: result-in 0.3s 0.9s both;
+}
+
+.result.gameover .result-title {
+  margin-top: 6rem;
+}
+
+@keyframes result-in {
+  from {
+    opacity: 0;
+  }
 }
