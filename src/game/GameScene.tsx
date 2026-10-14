@@ -1,0 +1,139 @@
+import { PerspectiveCamera } from "@react-three/drei";
+import { useFrame } from "@react-three/fiber";
+import { useRef, type RefObject } from "react";
+import type { Group, Mesh, PerspectiveCamera as PerspectiveCameraImpl } from "three";
+import { CAMERA, cameraPoseFor } from "./camera.ts";
+import { CAR, CRAB, CROSSING, ROAD } from "./constants.ts";
+import { step, type Corpse, type Direction, type GameState } from "./logic.ts";
+
+type Props = {
+  stateRef: RefObject<GameState>;
+  directionRef: RefObject<Direction>;
+  corpses: readonly Corpse[];
+  /** ゲームオーバーかクリアになった瞬間に 1 回呼ばれる */
+  onEnd: (state: GameState) => void;
+};
+
+/** 仮置きの車: 車体の箱 + 円柱タイヤ 4 本 */
+function CarModel() {
+  const tireY = CAR.tireRadius;
+  const offsets: [number, number][] = [
+    [-CAR.halfTrack, -CAR.halfWheelbase],
+    [CAR.halfTrack, -CAR.halfWheelbase],
+    [-CAR.halfTrack, CAR.halfWheelbase],
+    [CAR.halfTrack, CAR.halfWheelbase],
+  ];
+  return (
+    <>
+      <mesh position={[0, CAR.bodyBottom + CAR.bodyHeight / 2, 0]}>
+        <boxGeometry args={[CAR.bodyWidth, CAR.bodyHeight, CAR.bodyLength]} />
+        <meshStandardMaterial color="#3b82f6" />
+      </mesh>
+      {offsets.map(([x, z]) => (
+        <mesh key={`${x},${z}`} position={[x, tireY, z]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[CAR.tireRadius, CAR.tireRadius, CAR.tireHalfWidth * 2, 16]} />
+          <meshStandardMaterial color="#111" />
+        </mesh>
+      ))}
+    </>
+  );
+}
+
+export function GameScene({ stateRef, directionRef, corpses, onEnd }: Props) {
+  const crabRef = useRef<Mesh>(null);
+  const carRefs = useRef<(Group | null)[]>([]);
+  const cameraRef = useRef<PerspectiveCameraImpl>(null);
+
+  useFrame((_, delta) => {
+    const prev = stateRef.current;
+    const next = step(prev, Math.min(delta, 0.05), directionRef.current);
+    stateRef.current = next;
+
+    // 蟹を動かしたのと同じフレームでカメラを合わせる（1 フレーム遅れも作らない）
+    const camera = cameraRef.current;
+    if (camera) {
+      const pose = cameraPoseFor(next.crabX, CRAB.z);
+      camera.position.set(...pose.position);
+      camera.lookAt(...pose.lookAt);
+    }
+
+    if (crabRef.current) {
+      crabRef.current.position.x = next.crabX;
+      crabRef.current.visible = next.phase !== "gameover";
+    }
+    carRefs.current.forEach((group, i) => {
+      if (!group) return;
+      const car = next.cars[i];
+      group.visible = Boolean(car);
+      if (car) group.position.set(car.x, 0, car.z);
+    });
+
+    if (prev.phase === "playing" && next.phase !== "playing") onEnd(next);
+  });
+
+  return (
+    <>
+      <PerspectiveCamera
+        ref={cameraRef}
+        makeDefault
+        position={cameraPoseFor(CROSSING.startX, CRAB.z).position}
+        fov={CAMERA.fov}
+      />
+      <color attach="background" args={["#9ad3f5"]} />
+      <fog attach="fog" args={["#9ad3f5", 30, 75]} />
+      <ambientLight intensity={0.7} />
+      <directionalLight position={[5, 10, 5]} intensity={1.2} />
+
+      {/* 道路と歩道 */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -ROAD.length / 2 + 10]}>
+        <planeGeometry args={[ROAD.width, ROAD.length]} />
+        <meshStandardMaterial color="#444" />
+      </mesh>
+      {[-1, 1].map((side) => (
+        <mesh
+          key={side}
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[side * (ROAD.width / 2 + 3), 0.01, -ROAD.length / 2 + 10]}
+        >
+          <planeGeometry args={[6, ROAD.length]} />
+          <meshStandardMaterial color="#d6c49a" />
+        </mesh>
+      ))}
+
+      {/* ゴールライン（向こう側の歩道） */}
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[CROSSING.goalX, 0.02, -ROAD.length / 2 + 10]}
+      >
+        <planeGeometry args={[0.25, ROAD.length]} />
+        <meshStandardMaterial color="#facc15" />
+      </mesh>
+
+      {/* 亡骸（前回までのプレイ分も含む） */}
+      {corpses.map((c, i) => (
+        <mesh key={i} rotation={[-Math.PI / 2, 0, 0]} position={[c.x, 0.015, c.z]}>
+          <circleGeometry args={[CRAB.halfWidth * 1.6, 20]} />
+          <meshStandardMaterial color="#8b1a1a" />
+        </mesh>
+      ))}
+
+      {/* 蟹（仮置きの箱） */}
+      <mesh ref={crabRef} position={[0, CRAB.height / 2, CRAB.z]}>
+        <boxGeometry args={[CRAB.halfWidth * 2, CRAB.height, CRAB.halfDepth * 2]} />
+        <meshStandardMaterial color="#e2483d" />
+      </mesh>
+
+      {Array.from({ length: CAR.maxCars }, (_, i) => (
+        <group
+          key={i}
+          visible={false}
+          ref={(g) => {
+            carRefs.current[i] = g;
+          }}
+        >
+          <CarModel />
+        </group>
+      ))}
+    </>
+  );
+}
