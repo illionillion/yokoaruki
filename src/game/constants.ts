@@ -103,7 +103,8 @@ export const FOLLOW_GAP = 1.5;
 export const MAX_CARS = 48;
 
 export const STORAGE_KEY = "yokoaruki:corpses";
-export const MAX_CORPSES = 200;
+/** 保存する亡骸の上限。これを超えたら古いものから捨てる */
+export const MAX_CORPSES = 50;
 
 /** 横断: 手前の歩道から出発し、向こう側の歩道に着いたらゴール */
 export const CROSSING = {

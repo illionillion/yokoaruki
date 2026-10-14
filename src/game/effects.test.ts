@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { CRAB } from "./constants.ts";
 import {
+  CORPSE_GROUND_Y,
   CORPSE_THICKNESS,
   EFFECTS,
+  MAX_STACK_LEVEL,
   makeParticles,
   particleAt,
   shakeOffset,
@@ -70,7 +72,34 @@ describe("亡骸の山", () => {
       { x: 0, z: 0.05 },
     ]);
     expect(stacked.map((s) => s.level)).toEqual([0, 1, 0, 2]);
-    expect(stacked[3].y).toBeCloseTo(2 * CORPSE_THICKNESS);
+    expect(stacked[3].y).toBeCloseTo(CORPSE_GROUND_Y + 2 * CORPSE_THICKNESS);
+    expect(stacked[0].y).toBeCloseTo(CORPSE_GROUND_Y);
+  });
+
+  it("段は上限で頭打ちになり、あふれた亡骸は地面に寝かせる", () => {
+    const stacked = stackCorpses(Array.from({ length: 30 }, () => ({ x: 1, z: 2 })));
+    const maxY = CORPSE_GROUND_Y + MAX_STACK_LEVEL * CORPSE_THICKNESS;
+    expect(Math.max(...stacked.map((s) => s.level))).toBe(MAX_STACK_LEVEL);
+    expect(Math.max(...stacked.map((s) => s.y))).toBeCloseTo(maxY);
+    expect(Math.min(...stacked.map((s) => s.y))).toBeCloseTo(CORPSE_GROUND_Y);
+    expect(maxY).toBeLessThan(0.15);
+    const far = Math.max(...stacked.map((s) => Math.hypot(s.x - 1, s.z - 2)));
+    expect(far).toBeGreaterThan(0);
+    expect(far).toBeLessThan(2);
+  });
+
+  it("離れた亡骸は地面にそのまま置く", () => {
+    const stacked = stackCorpses([
+      { x: 0, z: 0 },
+      { x: 5, z: 0 },
+      { x: 0, z: 5 },
+    ]);
+    expect(stacked.map((s) => s.level)).toEqual([0, 0, 0]);
+    expect(stacked.map((s) => [s.x, s.y, s.z])).toEqual([
+      [0, CORPSE_GROUND_Y, 0],
+      [5, CORPSE_GROUND_Y, 0],
+      [0, CORPSE_GROUND_Y, 5],
+    ]);
   });
 
   it("回転は順番で決まり、毎回同じ", () => {

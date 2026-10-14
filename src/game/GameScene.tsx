@@ -13,6 +13,7 @@ import {
   stackCorpses,
   type Particle,
 } from "./effects.ts";
+import { corpseScatterSeed, SCATTER } from "./legs.ts";
 import { step, type Corpse, type Direction, type GameState } from "./logic.ts";
 import { seeded } from "./random.ts";
 import { CRAB_MODELS } from "./models/crab.tsx";
@@ -49,6 +50,8 @@ export function GameScene({ stateRef, directionRef, corpses, onEnd }: Props) {
   const particlesRef = useRef<Particle[]>([]);
   const newestCorpseRef = useRef<Group | null>(null);
   const trackRefs = useRef<(Mesh | null)[]>([]);
+  const walkingRef = useRef(false);
+  const scatterTimeRef = useRef<number>(SCATTER.seconds);
 
   const stacked = useMemo(() => stackCorpses(corpses), [corpses]);
   const AliveCrab = CRAB_MODELS.alive;
@@ -72,6 +75,10 @@ export function GameScene({ stateRef, directionRef, corpses, onEnd }: Props) {
       camera.position.set(pose.position[0] + sx, pose.position[1] + sy, pose.position[2]);
       camera.lookAt(pose.lookAt[0] + sx, pose.lookAt[1] + sy, pose.lookAt[2]);
     }
+
+    walkingRef.current = next.phase === "playing" && directionRef.current !== 0;
+    // 潰れたモデルに切り替わってから、脚が飛び散る
+    scatterTimeRef.current = over ? Math.max(0, t - EFFECTS.squashSeconds) : SCATTER.seconds;
 
     const crab = crabRef.current;
     if (crab) {
@@ -195,17 +202,20 @@ export function GameScene({ stateRef, directionRef, corpses, onEnd }: Props) {
       {stacked.map((c, i) => (
         <group
           key={i}
-          position={[c.x, 0.015 + c.y, c.z]}
+          position={[c.x, c.y, c.z]}
           rotation={[0, c.rotation, 0]}
           ref={i === stacked.length - 1 ? newestCorpseRef : undefined}
         >
-          <SquashedCrab />
+          <SquashedCrab
+            seed={corpseScatterSeed(i, c.x, c.z)}
+            scatterTimeRef={i === stacked.length - 1 ? scatterTimeRef : undefined}
+          />
         </group>
       ))}
 
       {/* 蟹 */}
       <group ref={crabRef} position={[CROSSING.startX, 0, CRAB.z]}>
-        <AliveCrab />
+        <AliveCrab walkingRef={walkingRef} />
       </group>
 
       {/* カニ汁 */}

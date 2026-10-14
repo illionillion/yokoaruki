@@ -93,23 +93,69 @@ export type StackedCorpse = {
   rotation: number;
 };
 
-/** 潰れた蟹 1 匹分の厚み */
-export const CORPSE_THICKNESS = 0.05;
+/** 潰れた蟹 1 匹分の厚み。段の間隔はこれと同じにして、間が空いて浮かないようにする */
+export const CORPSE_THICKNESS = 0.03;
 
-/** 近くに落ちた亡骸は上に積む。古い順に置き、重なる亡骸の数で段を決める */
+/** 地面に寝かせる高さ。道路面に置く */
+export const CORPSE_GROUND_Y = 0;
+
+/** 同じ場所に積む段の上限（0 始まり）。超えた分は地面に寝かせて横へずらす */
+export const MAX_STACK_LEVEL = 2;
+
+function topLevelAt(
+  placed: readonly StackedCorpse[],
+  x: number,
+  z: number,
+  radius: number
+): number {
+  let top = -1;
+  for (const p of placed) {
+    if (Math.hypot(p.x - x, p.z - z) < radius) top = Math.max(top, p.level);
+  }
+  return top;
+}
+
+/** 段がいっぱいのとき、死んだ場所の周りに地面へ寝かせる位置（黄金角の螺旋） */
+function groundSlot(
+  n: number,
+  originX: number,
+  originZ: number,
+  radius: number
+): { x: number; z: number } {
+  if (n === 0) return { x: originX, z: originZ };
+  const angle = n * 2.399;
+  const dist = radius * 1.05 * Math.sqrt(n);
+  return { x: originX + Math.cos(angle) * dist, z: originZ + Math.sin(angle) * dist };
+}
+
+/**
+ * 近くに落ちた亡骸は上に積む。古い順に置き、重なる亡骸の段で高さを決める。
+ * 段が上限に達したら、それ以上は浮かさず地面に寝かせてすぐ隣へずらす。
+ */
 export function stackCorpses(
   corpses: readonly { x: number; z: number }[],
   radius = CRAB.halfWidth * 1.2
 ): StackedCorpse[] {
   const placed: StackedCorpse[] = [];
   corpses.forEach((c, i) => {
-    const below = placed.filter((p) => Math.hypot(p.x - c.x, p.z - c.z) < radius);
-    const level = below.length === 0 ? 0 : Math.max(...below.map((p) => p.level)) + 1;
+    let x = c.x;
+    let z = c.z;
+    let level = 0;
+    for (let slot = 0; slot < 64; slot++) {
+      const pos = groundSlot(slot, c.x, c.z, radius);
+      const top = topLevelAt(placed, pos.x, pos.z, radius);
+      if (top < MAX_STACK_LEVEL) {
+        x = pos.x;
+        z = pos.z;
+        level = top + 1;
+        break;
+      }
+    }
     placed.push({
-      x: c.x,
-      z: c.z,
+      x,
+      z,
       level,
-      y: level * CORPSE_THICKNESS,
+      y: CORPSE_GROUND_Y + level * CORPSE_THICKNESS,
       rotation: ((i * 2.399) % (Math.PI * 2)) - Math.PI,
     });
   });
