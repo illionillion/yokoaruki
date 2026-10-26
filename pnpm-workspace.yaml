@@ -3,3 +3,8 @@ allowBuilds:
 
 onlyBuiltDependencies:
   - lefthook
+
+# jsdom 経由の undici と ajv 経由の fast-uri を、同じメジャー内の修正版へ固定する
+overrides:
+  "undici@>=8.0.0 <8.12.2": ^8.12.2
+  "fast-uri@>=3.0.0 <3.1.9": ^3.1.9
